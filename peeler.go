@@ -6,7 +6,6 @@ import (
 	"reflect"
 
 	"github.com/codegangsta/inject"
-	"github.com/solher/zest/utils"
 )
 
 type Peeler struct {
@@ -32,17 +31,30 @@ func (p *Peeler) Register(dependencies ...interface{}) error {
 }
 
 func (p *Peeler) GetOne(obj interface{}) error {
-	type depStruct struct {
-		obj interface{}
+	if obj == nil {
+		return errors.New("Invalid param: is nil")
 	}
 
-	dep := &depStruct{obj: obj}
+	objPtr := reflect.ValueOf(obj)
 
-	if err := p.Get(dep); err != nil {
-		return err
+	if objPtr.Type().Kind() != reflect.Ptr {
+		return errors.New("Invalid param: is not a pointer to a dep")
 	}
 
-	utils.Dump(reflect.ValueOf(dep.obj))
+	objValue := objPtr.Elem()
+
+	if objValue.Kind() == reflect.Invalid {
+		return errors.New("Invalid param: the dep pointer must be initialized")
+	}
+
+	for _, dep := range p.deps {
+		depPtr := reflect.ValueOf(dep)
+
+		if objPtr.Type() == depPtr.Type() && objValue.CanSet() {
+			objValue.Set(depPtr.Elem())
+			break
+		}
+	}
 
 	return nil
 }
@@ -52,24 +64,27 @@ func (p *Peeler) Get(depStruct interface{}) error {
 		return errors.New("Invalid param: is nil")
 	}
 
-	ptrValue := reflect.ValueOf(depStruct)
+	ptrStruct := reflect.ValueOf(depStruct)
 
-	if ptrValue.Type().Kind() != reflect.Ptr || ptrValue.Elem().Kind() != reflect.Struct {
+	if ptrStruct.Type().Kind() != reflect.Ptr || ptrStruct.Elem().Kind() != reflect.Struct {
 		return errors.New("Invalid param: is not a pointer to a struct to populate")
 	}
 
-	structValue := reflect.Indirect(ptrValue)
+	structValue := ptrStruct.Elem()
 	numField := structValue.NumField()
 
 	for i := 0; i < numField; i++ {
+		fieldPtr := structValue.Field(i)
+
 		for _, dep := range p.deps {
-			if structValue.Field(i).Type() == reflect.TypeOf(dep) && structValue.Field(i).CanSet() {
-				structValue.Field(i).Set(reflect.ValueOf(dep))
+			depPtr := reflect.ValueOf(dep)
+
+			if fieldPtr.Type() == depPtr.Type() && fieldPtr.CanSet() {
+				fieldPtr.Set(depPtr)
+				break
 			}
 		}
 	}
-
-	depStruct = structValue.Interface()
 
 	return nil
 }
@@ -153,7 +168,7 @@ func (p *Peeler) OldPopulate() error {
 
 	for len(failedDeps) > 0 {
 		if lastLen[0] <= len(failedDeps) && lastLen[1] <= lastLen[0] {
-			return errors.New(fmt.Sprintf("Dependencies not found: %v", failedDeps.GetMissing()))
+			return fmt.Errorf("Dependencies not found: %v", failedDeps.GetMissing())
 		}
 		lastLen[1] = lastLen[0]
 		lastLen[0] = len(failedDeps)

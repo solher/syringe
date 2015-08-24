@@ -131,6 +131,38 @@ func TestGet(t *testing.T) {
 	err := peeler.Get(deps)
 	if a.NoError(err) {
 		r.NotNil(deps)
+		r.NotNil(deps.FoundDepD)
+		r.NotNil(deps.FoundDepA)
 		a.EqualValues(deps.FoundDepD.depB.depA, deps.FoundDepA)
+	}
+}
+
+func TestGetOne(t *testing.T) {
+	a := assert.New(t)
+	r := require.New(t)
+	peeler := NewPeeler()
+
+	depA := newDep4()
+	depB := newDep3(depA)
+	depC := newDep2(nil, depB)
+	depD := newDep1(depC, depB)
+	depC.depA = depD
+	peeler.deps = append(peeler.deps, depA, depB, depC, depD)
+
+	var uninitDep *dep1
+	integer := 2
+
+	r.NotPanics(func() { _ = peeler.GetOne(nil) })
+	r.NotPanics(func() { _ = peeler.GetOne(integer) })
+	r.NotPanics(func() { _ = peeler.GetOne(&integer) })
+	r.NotPanics(func() { _ = peeler.GetOne(dep4{}) })
+	r.NotPanics(func() { _ = peeler.GetOne(uninitDep) })
+
+	foundDepA := &dep4{}
+
+	err := peeler.GetOne(foundDepA)
+	if a.NoError(err) {
+		r.NotNil(foundDepA)
+		a.Equal(foundDepA.content, "foobar")
 	}
 }
