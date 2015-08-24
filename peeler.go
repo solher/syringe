@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/codegangsta/inject"
+	"github.com/solher/zest/utils"
 )
 
 type Peeler struct {
@@ -35,17 +36,25 @@ func (p *Peeler) GetOne(obj interface{}) error {
 		obj interface{}
 	}
 
-	if err := p.Get(&depStruct{obj: obj}); err != nil {
+	dep := &depStruct{obj: obj}
+
+	if err := p.Get(dep); err != nil {
 		return err
 	}
+
+	utils.Dump(reflect.ValueOf(dep.obj))
 
 	return nil
 }
 
 func (p *Peeler) Get(depStruct interface{}) error {
+	if depStruct == nil {
+		return errors.New("Invalid param: is nil")
+	}
+
 	ptrValue := reflect.ValueOf(depStruct)
 
-	if ptrValue.Type().Kind() != reflect.Ptr {
+	if ptrValue.Type().Kind() != reflect.Ptr || ptrValue.Elem().Kind() != reflect.Struct {
 		return errors.New("Invalid param: is not a pointer to a struct to populate")
 	}
 
@@ -54,7 +63,7 @@ func (p *Peeler) Get(depStruct interface{}) error {
 
 	for i := 0; i < numField; i++ {
 		for _, dep := range p.deps {
-			if structValue.Field(i).Type() == reflect.TypeOf(dep) {
+			if structValue.Field(i).Type() == reflect.TypeOf(dep) && structValue.Field(i).CanSet() {
 				structValue.Field(i).Set(reflect.ValueOf(dep))
 			}
 		}
