@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 
 	"github.com/codegangsta/inject"
@@ -89,9 +88,27 @@ func (p *Peeler) Get(depStruct interface{}) error {
 	return nil
 }
 
-func (p *Peeler) Populate() error {
-	// mockedDeps is the list of every mocked empty dependencies instanciated during the injection
-	mockedDeps := []reflect.Value{}
+func (p *Peeler) SafePopulate() error {
+	if !checkInjectionConflicts(p.deps) {
+		return errors.New("conflict detected: multiple constructors returning the same dependency type")
+	}
+
+	results, err := p.simplePopulate(p.deps)
+	if err != nil {
+		return err
+	}
+
+	p.deps = []interface{}{}
+	for _, dep := range results.deps {
+		p.deps = append(p.deps, dep.Interface())
+	}
+
+	return nil
+}
+
+func (p *Peeler) stubPopulate() error {
+	// stubDeps is the list of every stub empty dependencies instanciated during the injection
+	stubDeps := []reflect.Value{}
 	// deps is the list of every dependencies available for injection
 	deps := []reflect.Value{}
 
@@ -101,49 +118,46 @@ func (p *Peeler) Populate() error {
 
 		switch value.Kind() {
 		case reflect.Func:
-			mockedParams := []reflect.Value{}
+			stubParams := []reflect.Value{}
 
 			for i := 0; i < value.Type().NumIn(); i++ {
 				param := value.Type().In(i)
-				var mockedDep reflect.Value
+				var stubDep reflect.Value
 
 				switch param.Kind() {
 				case reflect.Struct:
-					mockedDep = reflect.New(param)
+					stubDep = reflect.New(param)
 
 				case reflect.Ptr:
-					mockedDep = reflect.New(param.Elem())
+					stubDep = reflect.New(param.Elem())
 				}
 
-				mockedParams = append(mockedParams, mockedDep)
+				stubParams = append(stubParams, stubDep)
 			}
 
-			returnValues := value.Call(mockedParams)
+			returnValues := value.Call(stubParams)
 
-			mockedDeps = append(mockedDeps, mockedParams...)
+			stubDeps = append(stubDeps, stubParams...)
 			deps = append(deps, returnValues...)
-
-		case reflect.Struct:
-			deps = append(deps, value)
 
 		case reflect.Ptr:
 			deps = append(deps, value)
 		}
 	}
 
-	// in the second step, the mocked dependencies are replaced by "real" ones
-	for _, mockedDep := range mockedDeps {
+	// in the second step, the stub dependencies are replaced by "real" ones
+	for _, stubDep := range stubDeps {
 		found := false
 
 		for _, dep := range deps {
-			if mockedDep.Type() == dep.Type() {
-				mockedDep.Elem().Set(dep.Elem())
+			if stubDep.Type() == dep.Type() {
+				stubDep.Elem().Set(dep.Elem())
 				found = true
 			}
 		}
 
 		if !found {
-			return errors.New("Dep value not found")
+			return errors.New("dep value not found")
 		}
 	}
 
@@ -155,87 +169,126 @@ func (p *Peeler) Populate() error {
 	return nil
 }
 
-func (p *Peeler) OldPopulate() error {
-	injector := p.injector
-	failedDeps := dependencies{}
-	values := []interface{}{}
+type results struct {
+	missingDeps              []reflect.Type
+	partialContructors, deps []reflect.Value
+}
 
-	for _, obj := range p.deps {
-		failedDeps = append(failedDeps, dependency{Object: obj})
+func (p *Peeler) simplePopulate(depsCpy []interface{}) (*results, error) {
+	// "missingDeps" is the list of every dependencies missing to call the constructors in "partialContructors"
+	missingDeps := []reflect.Type{}
+	// "partialContructors" is the list of the constructors which can't be called with the params in "deps"
+	partialContructors := []reflect.Value{}
+	// "deps" is the list of every dependencies available for injection
+	deps := []reflect.Value{}
+
+	// in the first step, the above lists are populated from the provided dependencies
+	for _, dep := range depsCpy {
+		value := reflect.ValueOf(dep)
+
+		switch value.Kind() {
+		case reflect.Func:
+			partialContructors = append(partialContructors, value)
+		case reflect.Ptr:
+			deps = append(deps, value)
+		}
 	}
 
-	lastLen := [2]int{len(failedDeps) + 1, len(failedDeps) + 2}
+	lastDepsLen := -1
 
-	for len(failedDeps) > 0 {
-		if lastLen[0] <= len(failedDeps) && lastLen[1] <= lastLen[0] {
-			return fmt.Errorf("Dependencies not found: %v", failedDeps.GetMissing())
-		}
-		lastLen[1] = lastLen[0]
-		lastLen[0] = len(failedDeps)
+	for len(deps) > lastDepsLen {
+		lastDepsLen = len(deps)
 
-		for _, dep := range failedDeps {
-			obj := dep.Object
-			kind := reflect.ValueOf(obj).Kind()
+		for _, cons := range partialContructors {
+			params := []reflect.Value{}
+			numIn := cons.Type().NumIn()
 
-			switch kind {
-			case reflect.Func:
-				vals, err := injector.Invoke(obj)
-
-				if err != nil {
+			for i := 0; i < numIn; i++ {
+				param := cons.Type().In(i)
+				if foundDep, err := find(deps, param); err != nil {
+					missingDeps = append(missingDeps, param)
 				} else {
-					failedDeps.Remove(dep)
-
-					for _, val := range vals {
-						injector.Map(val.Interface())
-						values = append(values, val.Interface())
-					}
+					params = append(params, foundDep)
 				}
-			case reflect.Struct, reflect.Ptr:
-				failedDeps.Remove(dep)
-				injector.Map(obj)
-				values = append(values, obj)
+			}
+
+			if len(params) == numIn {
+				returnValues := cons.Call(params)
+				for _, v := range returnValues {
+					deps = append(deps, v)
+					missingDeps, _ = removeType(missingDeps, v.Type())
+				}
+
+				partialContructors, _ = removeValue(partialContructors, cons)
 			}
 		}
 	}
 
-	p.deps = values
-
-	return nil
-}
-
-type (
-	dependencies []dependency
-
-	dependency struct {
-		Object interface{}
-	}
-)
-
-func (slc *dependencies) GetMissing() []reflect.Type {
-	s := *slc
-	missing := []reflect.Type{}
-
-	for _, dep := range s {
-		missing = append(missing, reflect.TypeOf(dep.Object))
+	result := &results{
+		missingDeps:        missingDeps,
+		partialContructors: partialContructors,
+		deps:               deps,
 	}
 
-	return missing
+	if len(missingDeps) > 0 {
+		errMsg := "injection failed. Missing dependencies: "
+		for _, d := range missingDeps {
+			errMsg = errMsg + d.String() + ", "
+		}
+		return result, errors.New(errMsg[:len(errMsg)-1])
+	}
+
+	return result, nil
 }
 
-func (slc *dependencies) Add(dep dependency) {
-	s := *slc
-	s = append(s, dep)
-	*slc = s
-}
-
-func (slc *dependencies) Remove(dep dependency) {
-	s := *slc
-
-	for i, d := range s {
-		if reflect.ValueOf(d.Object) == reflect.ValueOf(dep.Object) {
-			s = append(s[:i], s[i+1:]...)
-			*slc = s
-			return
+func removeValue(a []reflect.Value, value reflect.Value) ([]reflect.Value, error) {
+	for i, v := range a {
+		if v == value {
+			return append(a[:i], a[i+1:]...), nil
 		}
 	}
+
+	return nil, errors.New("value not found")
+}
+
+func removeType(a []reflect.Type, value reflect.Type) ([]reflect.Type, error) {
+	for i, t := range a {
+		if t == value {
+			return append(a[:i], a[i+1:]...), nil
+		}
+	}
+
+	return nil, errors.New("value not found")
+}
+
+func find(a []reflect.Value, depType reflect.Type) (reflect.Value, error) {
+	for _, v := range a {
+		if v.Type() == depType {
+			return v, nil
+		}
+	}
+
+	return reflect.Value{}, errors.New("value not found")
+}
+
+func checkInjectionConflicts(deps []interface{}) bool {
+	t := []reflect.Type{}
+
+	for _, d := range deps {
+		dv := reflect.ValueOf(d)
+		if dv.Kind() == reflect.Func {
+			for i := 0; i < dv.Type().NumOut(); i++ {
+				param := dv.Type().Out(i)
+				for _, v1 := range t {
+					if v1 == param {
+						return false
+					}
+				}
+
+				t = append(t, param)
+			}
+		}
+	}
+
+	return true
 }

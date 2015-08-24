@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/solher/zest/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,8 @@ type (
 	}
 
 	dep3 struct {
-		depA *dep4
+		depA    *dep4
+		content string
 	}
 
 	dep4 struct {
@@ -28,6 +30,7 @@ type (
 )
 
 func newDep1(depA *dep2, depB *dep3) *dep1 {
+	depB.content = "foobar"
 	return &dep1{depA: depA, depB: depB}
 }
 
@@ -55,60 +58,96 @@ func TestRegister(t *testing.T) {
 
 	peeler.Register(deps)
 	r.NotPanics(func() { _ = peeler.deps[0]; _ = peeler.deps[1] })
-	a.IsType(newDep1, peeler.deps[0], "Array register failed")
-	a.IsType(newDep2, peeler.deps[1], "Array register failed")
+	a.IsType(newDep1, peeler.deps[0])
+	a.IsType(newDep2, peeler.deps[1])
 
 	peeler.Register(newDep3, newDep4)
 	r.NotPanics(func() { _ = peeler.deps[2]; _ = peeler.deps[3] })
-	a.IsType(newDep3, peeler.deps[2], "Multiple register failed")
-	a.IsType(newDep4, peeler.deps[3], "Multiple register failed")
+	a.IsType(newDep3, peeler.deps[2])
+	a.IsType(newDep4, peeler.deps[3])
 
 	peeler.Register(newDep4)
 	r.NotPanics(func() { _ = peeler.deps[4] })
-	a.IsType(newDep4, peeler.deps[4], "Simple register failed")
+	a.IsType(newDep4, peeler.deps[4])
 }
 
-func TestPopulate(t *testing.T) {
+func TestSafePopulate(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
 	peeler := NewPeeler()
 
 	peeler.deps = append(peeler.deps, newDep3, newDep4)
 
-	err := peeler.Populate()
-	if a.NoError(err, "Simple injection failed") {
-		errMsg := "Simple injection didn't return errors but "
-		r.NotPanics(func() { _ = peeler.deps[0] })
-		a.IsType(&dep3{}, peeler.deps[0], errMsg+"the internal dependencies are not refreshed")
-		a.NotNil(peeler.deps[0].(*dep3).depA, errMsg+"dependencies are nil")
-		a.Equal(peeler.deps[0].(*dep3).depA.content, "foobar", errMsg+"dependencies seems to be mocks")
+	err := peeler.SafePopulate()
+	if a.NoError(err) {
+		r.NotPanics(func() { _ = peeler.deps[0]; _ = peeler.deps[1] })
+		depA := peeler.deps[0]
+		depB := peeler.deps[1]
+
+		switch depA.(type) {
+		case *dep3:
+			a.IsType(&dep3{}, depA)
+			a.NotNil(depA.(*dep3).depA)
+			a.Equal(depA.(*dep3).depA.content, "foobar")
+		case *dep4:
+			a.Equal(depA.(*dep4).content, "foobar")
+		}
+
+		switch depB.(type) {
+		case *dep3:
+			a.IsType(&dep3{}, depB)
+			a.NotNil(depB.(*dep3).depA)
+			a.Equal(depB.(*dep3).depA.content, "foobar")
+		case *dep4:
+			a.Equal(depB.(*dep4).content, "foobar")
+		}
 	}
 
-	peeler.deps = append(peeler.deps, newDep1, newDep2, newDep1, newDep1)
+	peeler.deps = append(peeler.deps, newDep1, newDep2)
+	err = peeler.SafePopulate()
+	utils.Dump(err.Error())
+	a.Error(err, "we expect the safe populate to throw an error when dealing with a circular dependency")
 
-	err = peeler.Populate()
-	if a.NoError(err, "Circular dependency injection failed") {
-		errMsg := "Circular dependency injection didn't return errors but "
-		r.NotPanics(func() { _ = peeler.deps[2]; _ = peeler.deps[3] })
-		a.IsType(&dep1{}, peeler.deps[2], errMsg+"the internal dependencies are not refreshed")
-		a.NotNil(peeler.deps[2].(*dep1).depB, errMsg+"dependencies are nil")
-		a.Equal(peeler.deps[2].(*dep1).depB.depA.content, "foobar", errMsg+"dependencies seems to be mocks")
-		a.EqualValues(peeler.deps[2].(*dep1).depA, peeler.deps[3], errMsg+"dependencies seems to be mocks")
-		a.EqualValues(peeler.deps[3].(*dep2).depA, peeler.deps[2], errMsg+"dependencies seems to be mocks")
-	}
+	peeler.deps = append(peeler.deps, newDep1, newDep1)
+	err = peeler.SafePopulate()
+	utils.Dump(err.Error())
+	a.Error(err, "we expect the safe populate to throw an error when multiple constructors return the same type")
 }
+
+// func TestPopulate(t *testing.T) {
+// 	a := assert.New(t)
+// 	r := require.New(t)
+// 	peeler := NewPeeler()
+//
+// 	peeler.deps = append(peeler.deps, newDep3, newDep4)
+//
+// 	err := peeler.Populate()
+// 	if a.NoError(err) {
+// 		r.NotPanics(func() { _ = peeler.deps[0] })
+// 		a.IsType(&dep3{}, peeler.deps[0])
+// 		a.NotNil(peeler.deps[0].(*dep3).depA)
+// 		a.Equal(peeler.deps[0].(*dep3).depA.content, "foobar")
+// 	}
+//
+// 	peeler.deps = append(peeler.deps, newDep1, newDep2, newDep1, newDep1)
+//
+// 	err = peeler.Populate()
+// 	if a.NoError(err) {
+// 		r.NotPanics(func() { _ = peeler.deps[2]; _ = peeler.deps[3] })
+// 		a.IsType(&dep1{}, peeler.deps[2])
+// 		a.NotNil(peeler.deps[2].(*dep1).depB)
+// 		a.Equal(peeler.deps[2].(*dep1).depB.depA.content, "foobar")
+// 		a.NotEqual(peeler.deps[2].(*dep1).depB.content, "foobar")
+// 		a.EqualValues(peeler.deps[2].(*dep1).depA, peeler.deps[3])
+// 		a.EqualValues(peeler.deps[3].(*dep2).depA, peeler.deps[2])
+// 	}
+// }
 
 func TestGet(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
 	peeler := NewPeeler()
-
-	depA := newDep4()
-	depB := newDep3(depA)
-	depC := newDep2(nil, depB)
-	depD := newDep1(depC, depB)
-	depC.depA = depD
-	peeler.deps = append(peeler.deps, depA, depB, depC, depD)
+	buildDeps(peeler)
 
 	type privateDep struct {
 		depA *dep4
@@ -141,13 +180,7 @@ func TestGetOne(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
 	peeler := NewPeeler()
-
-	depA := newDep4()
-	depB := newDep3(depA)
-	depC := newDep2(nil, depB)
-	depD := newDep1(depC, depB)
-	depC.depA = depD
-	peeler.deps = append(peeler.deps, depA, depB, depC, depD)
+	buildDeps(peeler)
 
 	var uninitDep *dep1
 	integer := 2
@@ -165,4 +198,13 @@ func TestGetOne(t *testing.T) {
 		r.NotNil(foundDepA)
 		a.Equal(foundDepA.content, "foobar")
 	}
+}
+
+func buildDeps(peeler *Peeler) {
+	depA := newDep4()
+	depB := newDep3(depA)
+	depC := newDep2(nil, depB)
+	depD := newDep1(depC, depB)
+	depC.depA = depD
+	peeler.deps = append(peeler.deps, depA, depB, depC, depD)
 }
