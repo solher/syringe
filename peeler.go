@@ -5,14 +5,19 @@ import (
 	"reflect"
 )
 
+// Peeler is a dependency injector.
+// The deps field contains the dependencies and constructors to inject.
 type Peeler struct {
 	deps []interface{}
 }
 
+// NewPeeler returns a new Peeler object.
 func NewPeeler() *Peeler {
 	return &Peeler{}
 }
 
+// Register takes one, multiple, or a slice of dependencies and register them
+// into the injector.
 func (p *Peeler) Register(dependencies ...interface{}) error {
 	for _, d := range dependencies {
 		switch d.(type) {
@@ -26,6 +31,8 @@ func (p *Peeler) Register(dependencies ...interface{}) error {
 	return nil
 }
 
+// GetOne populates an empty pointer passed as argument with a dependency corresponding
+// to its type.
 func (p *Peeler) GetOne(obj interface{}) error {
 	if obj == nil {
 		return errors.New("Invalid param: is nil")
@@ -55,6 +62,8 @@ func (p *Peeler) GetOne(obj interface{}) error {
 	return nil
 }
 
+// Get populates the fields of an indirected struct passed as argument with
+// dependencies corresponding to their type.
 func (p *Peeler) Get(depStruct interface{}) error {
 	if depStruct == nil {
 		return errors.New("Invalid param: is nil")
@@ -90,23 +99,53 @@ type injectionParams struct {
 	partialContructors, deps []reflect.Value
 }
 
+// Populate builds the dependency graph.
+// It is capable to resolve circular dependencies using stub injection.
+//
+// Example:
+//   dep1 struct {
+// 	  dep *dep2
+//   }
+//
+//   dep2 struct {
+// 	  dep *dep1
+//   }
+//
+//   func newDep1(dep *dep2) *dep1 {
+// 	  return &dep1{dep: dep}
+//   }
+//
+//   func newDep2(dep *dep1) *dep2 {
+//   	return &dep2{dep: dep}
+//   }
+//
+// In this example, the injector will call the two constructors with stub
+// params and then will replace their value with the instanciated dependencies.
+//
+// That method can be seen as not safe because it would override eventual
+// modifications done in the constructors.
+//
+// That being said, it feels like the standard way of doing things as it is a very
+// specific problem that can't be fixed by a "by hand" injection. (True ?)
 func (p *Peeler) Populate() error {
 	return p.populate(false)
 }
 
+// SafePopulate builds the dependency graph as a human would do by hand.
+// Therefore, it is not capable to resolve circular dependencies.
 func (p *Peeler) SafePopulate() error {
 	return p.populate(true)
 }
 
 func (p *Peeler) populate(safeMode bool) error {
-	// first, we check if there will be injection conflicts
+	// first, injection conflicts are checked
 	if !checkInjectionConflicts(p.deps) {
 		return errors.New("conflict detected: multiple constructors returning the same dependency type")
 	}
 
 	params := &injectionParams{}
 
-	// first, the params are populated from the provided dependencies
+	// then the params are populated from the provided dependencies
 	for _, dep := range p.deps {
 		value := reflect.ValueOf(dep)
 
@@ -118,6 +157,7 @@ func (p *Peeler) populate(safeMode bool) error {
 		}
 	}
 
+	// the injection is run
 	results, err := p.simplePopulate(params)
 	if err != nil {
 		if safeMode {
@@ -130,6 +170,7 @@ func (p *Peeler) populate(safeMode bool) error {
 		}
 	}
 
+	// the results are saved if no error occurred
 	p.deps = []interface{}{}
 	for _, dep := range results.deps {
 		p.deps = append(p.deps, dep.Interface())
@@ -148,6 +189,7 @@ func (p *Peeler) simplePopulate(params *injectionParams) (*injectionParams, erro
 
 	lastDepsLen := -1
 
+	// try to inject while new dependencies are instanciated
 	for len(deps) > lastDepsLen {
 		lastDepsLen = len(deps)
 
@@ -182,6 +224,7 @@ func (p *Peeler) simplePopulate(params *injectionParams) (*injectionParams, erro
 		deps:               deps,
 	}
 
+	// generate an error if there are missing dependencies
 	err := checkMissingDependencies(missingDeps)
 	if err != nil {
 		return results, err
@@ -206,6 +249,7 @@ func (p *Peeler) stubPopulate(params *injectionParams) (*injectionParams, error)
 		case reflect.Func:
 			params := []reflect.Value{}
 
+			// create stubs for each missing dependency
 			for i := 0; i < c.Type().NumIn(); i++ {
 				param := c.Type().In(i)
 
@@ -251,6 +295,7 @@ func (p *Peeler) stubPopulate(params *injectionParams) (*injectionParams, error)
 		deps:        deps,
 	}
 
+	// generate an error if there are missing dependencies
 	err := checkMissingDependencies(missingDeps)
 	if err != nil {
 		return results, err
