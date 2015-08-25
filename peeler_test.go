@@ -3,7 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/solher/zest/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,72 +75,92 @@ func TestSafePopulate(t *testing.T) {
 	r := require.New(t)
 	peeler := NewPeeler()
 
-	peeler.deps = append(peeler.deps, newDep3, newDep4)
+	peeler.deps = append(peeler.deps, newDep3)
 
 	err := peeler.SafePopulate()
+	if a.Error(err) {
+		a.Contains(err.Error(), "*main.dep4", "the error message should indicate that the *main.dep4 dep is missing")
+	}
+
+	peeler.deps = append(peeler.deps, newDep4)
+
+	err = peeler.SafePopulate()
 	if a.NoError(err) {
-		r.NotPanics(func() { _ = peeler.deps[0]; _ = peeler.deps[1] })
-		depA := peeler.deps[0]
-		depB := peeler.deps[1]
+		_, _, depC, depD := getDeps(peeler)
 
-		switch depA.(type) {
-		case *dep3:
-			a.IsType(&dep3{}, depA)
-			a.NotNil(depA.(*dep3).depA)
-			a.Equal(depA.(*dep3).depA.content, "foobar")
-		case *dep4:
-			a.Equal(depA.(*dep4).content, "foobar")
-		}
+		r.NotNil(depC)
+		r.NotNil(depD)
+		r.IsType(&dep3{}, depC)
+		r.IsType(&dep4{}, depD)
 
-		switch depB.(type) {
-		case *dep3:
-			a.IsType(&dep3{}, depB)
-			a.NotNil(depB.(*dep3).depA)
-			a.Equal(depB.(*dep3).depA.content, "foobar")
-		case *dep4:
-			a.Equal(depB.(*dep4).content, "foobar")
-		}
+		a.NotNil(depC.depA)
+		a.Equal(depC.depA.content, "foobar")
 	}
 
 	peeler.deps = append(peeler.deps, newDep1, newDep2)
 	err = peeler.SafePopulate()
-	utils.Dump(err.Error())
 	a.Error(err, "we expect the safe populate to throw an error when dealing with a circular dependency")
 
 	peeler.deps = append(peeler.deps, newDep1, newDep1)
 	err = peeler.SafePopulate()
-	utils.Dump(err.Error())
-	a.Error(err, "we expect the safe populate to throw an error when multiple constructors return the same type")
+	if a.Error(err, "we expect the safe populate to throw an error when multiple constructors return the same type") {
+		a.Contains(err.Error(), "conflict", "the error message should indicate an injection conflict")
+	}
 }
 
-// func TestPopulate(t *testing.T) {
-// 	a := assert.New(t)
-// 	r := require.New(t)
-// 	peeler := NewPeeler()
-//
-// 	peeler.deps = append(peeler.deps, newDep3, newDep4)
-//
-// 	err := peeler.Populate()
-// 	if a.NoError(err) {
-// 		r.NotPanics(func() { _ = peeler.deps[0] })
-// 		a.IsType(&dep3{}, peeler.deps[0])
-// 		a.NotNil(peeler.deps[0].(*dep3).depA)
-// 		a.Equal(peeler.deps[0].(*dep3).depA.content, "foobar")
-// 	}
-//
-// 	peeler.deps = append(peeler.deps, newDep1, newDep2, newDep1, newDep1)
-//
-// 	err = peeler.Populate()
-// 	if a.NoError(err) {
-// 		r.NotPanics(func() { _ = peeler.deps[2]; _ = peeler.deps[3] })
-// 		a.IsType(&dep1{}, peeler.deps[2])
-// 		a.NotNil(peeler.deps[2].(*dep1).depB)
-// 		a.Equal(peeler.deps[2].(*dep1).depB.depA.content, "foobar")
-// 		a.NotEqual(peeler.deps[2].(*dep1).depB.content, "foobar")
-// 		a.EqualValues(peeler.deps[2].(*dep1).depA, peeler.deps[3])
-// 		a.EqualValues(peeler.deps[3].(*dep2).depA, peeler.deps[2])
-// 	}
-// }
+func TestPopulate(t *testing.T) {
+	a := assert.New(t)
+	r := require.New(t)
+	peeler := NewPeeler()
+
+	peeler.deps = append(peeler.deps, newDep3)
+
+	err := peeler.Populate()
+	if a.Error(err) {
+		a.Contains(err.Error(), "*main.dep4", "the error message should indicate that the *main.dep4 dep is missing")
+	}
+
+	peeler.deps = append(peeler.deps, newDep4)
+
+	err = peeler.Populate()
+	if a.NoError(err) {
+		_, _, depC, depD := getDeps(peeler)
+
+		r.NotNil(depC)
+		r.NotNil(depD)
+		r.IsType(&dep3{}, depC)
+		r.IsType(&dep4{}, depD)
+
+		a.NotNil(depC.depA)
+		a.Equal(depC.depA.content, "foobar")
+	}
+
+	peeler.deps = append(peeler.deps, newDep1, newDep2)
+
+	err = peeler.Populate()
+	if a.NoError(err) {
+		depA, depB, depC, depD := getDeps(peeler)
+
+		r.NotNil(depA)
+		r.NotNil(depB)
+		r.NotNil(depC)
+		r.NotNil(depD)
+		r.IsType(&dep1{}, depA)
+		r.IsType(&dep2{}, depB)
+		r.IsType(&dep3{}, depC)
+		r.IsType(&dep4{}, depD)
+
+		a.NotNil(depA.depB)
+		a.Equal(depA.depB.depA.content, "foobar")
+		a.Equal(depA.depB.content, "foobar")
+		a.EqualValues(depA.depA, depB)
+		a.EqualValues(depB.depA, depA)
+	}
+
+	peeler.deps = append(peeler.deps, newDep1, newDep1)
+	err = peeler.Populate()
+	a.Error(err, "we expect the populate method to throw an error when multiple constructors return the same type")
+}
 
 func TestGet(t *testing.T) {
 	a := assert.New(t)
@@ -207,4 +226,21 @@ func buildDeps(peeler *Peeler) {
 	depD := newDep1(depC, depB)
 	depC.depA = depD
 	peeler.deps = append(peeler.deps, depA, depB, depC, depD)
+}
+
+func getDeps(peeler *Peeler) (depA *dep1, depB *dep2, depC *dep3, depD *dep4) {
+	for i := 0; i < len(peeler.deps); i++ {
+		switch dep := peeler.deps[i].(type) {
+		case *dep1:
+			depA = dep
+		case *dep2:
+			depB = dep
+		case *dep3:
+			depC = dep
+		case *dep4:
+			depD = dep
+		}
+	}
+
+	return
 }

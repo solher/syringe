@@ -3,17 +3,14 @@ package main
 import (
 	"errors"
 	"reflect"
-
-	"github.com/codegangsta/inject"
 )
 
 type Peeler struct {
-	injector inject.Injector
-	deps     []interface{}
+	deps []interface{}
 }
 
 func NewPeeler() *Peeler {
-	return &Peeler{injector: inject.New()}
+	return &Peeler{}
 }
 
 func (p *Peeler) Register(dependencies ...interface{}) error {
@@ -88,14 +85,49 @@ func (p *Peeler) Get(depStruct interface{}) error {
 	return nil
 }
 
+type injectionParams struct {
+	missingDeps              []reflect.Type
+	partialContructors, deps []reflect.Value
+}
+
+func (p *Peeler) Populate() error {
+	return p.populate(false)
+}
+
 func (p *Peeler) SafePopulate() error {
+	return p.populate(true)
+}
+
+func (p *Peeler) populate(safeMode bool) error {
+	// first, we check if there will be injection conflicts
 	if !checkInjectionConflicts(p.deps) {
 		return errors.New("conflict detected: multiple constructors returning the same dependency type")
 	}
 
-	results, err := p.simplePopulate(p.deps)
+	params := &injectionParams{}
+
+	// first, the params are populated from the provided dependencies
+	for _, dep := range p.deps {
+		value := reflect.ValueOf(dep)
+
+		switch value.Kind() {
+		case reflect.Func:
+			params.partialContructors = append(params.partialContructors, value)
+		case reflect.Ptr:
+			params.deps = append(params.deps, value)
+		}
+	}
+
+	results, err := p.simplePopulate(params)
 	if err != nil {
-		return err
+		if safeMode {
+			return err
+		}
+
+		results, err = p.stubPopulate(results)
+		if err != nil {
+			return err
+		}
 	}
 
 	p.deps = []interface{}{}
@@ -106,93 +138,13 @@ func (p *Peeler) SafePopulate() error {
 	return nil
 }
 
-func (p *Peeler) stubPopulate() error {
-	// stubDeps is the list of every stub empty dependencies instanciated during the injection
-	stubDeps := []reflect.Value{}
-	// deps is the list of every dependencies available for injection
-	deps := []reflect.Value{}
-
-	// in the first step, the above lists are populated from the provided dependencies
-	for _, dep := range p.deps {
-		value := reflect.ValueOf(dep)
-
-		switch value.Kind() {
-		case reflect.Func:
-			stubParams := []reflect.Value{}
-
-			for i := 0; i < value.Type().NumIn(); i++ {
-				param := value.Type().In(i)
-				var stubDep reflect.Value
-
-				switch param.Kind() {
-				case reflect.Struct:
-					stubDep = reflect.New(param)
-
-				case reflect.Ptr:
-					stubDep = reflect.New(param.Elem())
-				}
-
-				stubParams = append(stubParams, stubDep)
-			}
-
-			returnValues := value.Call(stubParams)
-
-			stubDeps = append(stubDeps, stubParams...)
-			deps = append(deps, returnValues...)
-
-		case reflect.Ptr:
-			deps = append(deps, value)
-		}
-	}
-
-	// in the second step, the stub dependencies are replaced by "real" ones
-	for _, stubDep := range stubDeps {
-		found := false
-
-		for _, dep := range deps {
-			if stubDep.Type() == dep.Type() {
-				stubDep.Elem().Set(dep.Elem())
-				found = true
-			}
-		}
-
-		if !found {
-			return errors.New("dep value not found")
-		}
-	}
-
-	p.deps = []interface{}{}
-	for _, dep := range deps {
-		p.deps = append(p.deps, dep.Interface())
-	}
-
-	return nil
-}
-
-type results struct {
-	missingDeps              []reflect.Type
-	partialContructors, deps []reflect.Value
-}
-
-func (p *Peeler) simplePopulate(depsCpy []interface{}) (*results, error) {
+func (p *Peeler) simplePopulate(params *injectionParams) (*injectionParams, error) {
 	// "missingDeps" is the list of every dependencies missing to call the constructors in "partialContructors"
-	missingDeps := []reflect.Type{}
+	missingDeps := params.missingDeps
 	// "partialContructors" is the list of the constructors which can't be called with the params in "deps"
-	partialContructors := []reflect.Value{}
+	partialContructors := params.partialContructors
 	// "deps" is the list of every dependencies available for injection
-	deps := []reflect.Value{}
-
-	// in the first step, the above lists are populated from the provided dependencies
-	for _, dep := range depsCpy {
-		value := reflect.ValueOf(dep)
-
-		switch value.Kind() {
-		case reflect.Func:
-			partialContructors = append(partialContructors, value)
-		case reflect.Ptr:
-			deps = append(deps, value)
-		}
-	}
+	deps := params.deps
 
 	lastDepsLen := -1
 
@@ -205,10 +157,10 @@ func (p *Peeler) simplePopulate(depsCpy []interface{}) (*results, error) {
 
 			for i := 0; i < numIn; i++ {
 				param := cons.Type().In(i)
-				if foundDep, err := find(deps, param); err != nil {
-					missingDeps = append(missingDeps, param)
-				} else {
+				if foundDep, err := find(deps, param); err == nil {
 					params = append(params, foundDep)
+				} else {
+					missingDeps = append(missingDeps, param)
 				}
 			}
 
@@ -224,21 +176,87 @@ func (p *Peeler) simplePopulate(depsCpy []interface{}) (*results, error) {
 		}
 	}
 
-	result := &results{
+	results := &injectionParams{
 		missingDeps:        missingDeps,
 		partialContructors: partialContructors,
 		deps:               deps,
 	}
 
-	if len(missingDeps) > 0 {
-		errMsg := "injection failed. Missing dependencies: "
-		for _, d := range missingDeps {
-			errMsg = errMsg + d.String() + ", "
-		}
-		return result, errors.New(errMsg[:len(errMsg)-1])
+	err := checkMissingDependencies(missingDeps)
+	if err != nil {
+		return results, err
 	}
 
-	return result, nil
+	return results, nil
+}
+
+func (p *Peeler) stubPopulate(params *injectionParams) (*injectionParams, error) {
+	// "stubDeps" is the list of every stub empty dependencies instanciated during the injection
+	stubDeps := []reflect.Value{}
+	// "missingDeps" is the list of every dependencies missing to replace stub ones
+	missingDeps := params.missingDeps
+	// "partialContructors" is the list of the constructors which can't be called with the params in "deps"
+	partialContructors := params.partialContructors
+	// "deps" is the list of every dependencies available for injection
+	deps := params.deps
+
+	// in the first step, the partial constructors are called with stubs when deps are missing
+	for _, c := range partialContructors {
+		switch c.Kind() {
+		case reflect.Func:
+			params := []reflect.Value{}
+
+			for i := 0; i < c.Type().NumIn(); i++ {
+				param := c.Type().In(i)
+
+				if foundDep, err := find(deps, param); err == nil {
+					params = append(params, foundDep)
+				} else {
+					if param.Kind() == reflect.Ptr {
+						stubDep := reflect.New(param.Elem())
+						params = append(params, stubDep)
+						stubDeps = append(stubDeps, stubDep)
+					}
+				}
+			}
+
+			returnValues := c.Call(params)
+			deps = append(deps, returnValues...)
+
+		case reflect.Ptr:
+			deps = append(deps, c)
+		}
+	}
+
+	// in the second step, the stub dependencies are replaced by "real" ones
+	missingDeps = []reflect.Type{}
+
+	for _, stubDep := range stubDeps {
+		found := false
+
+		for _, dep := range deps {
+			if stubDep.Type() == dep.Type() {
+				stubDep.Elem().Set(dep.Elem())
+				found = true
+			}
+		}
+
+		if !found {
+			missingDeps = append(missingDeps, stubDep.Type())
+		}
+	}
+
+	results := &injectionParams{
+		missingDeps: missingDeps,
+		deps:        deps,
+	}
+
+	err := checkMissingDependencies(missingDeps)
+	if err != nil {
+		return results, err
+	}
+
+	return results, nil
 }
 
 func removeValue(a []reflect.Value, value reflect.Value) ([]reflect.Value, error) {
@@ -291,4 +309,16 @@ func checkInjectionConflicts(deps []interface{}) bool {
 	}
 
 	return true
+}
+
+func checkMissingDependencies(missingDeps []reflect.Type) error {
+	if len(missingDeps) > 0 {
+		errMsg := "injection failed. Missing dependencies: "
+		for _, d := range missingDeps {
+			errMsg = errMsg + d.String() + ", "
+		}
+		return errors.New(errMsg[:len(errMsg)-2])
+	}
+
+	return nil
 }
