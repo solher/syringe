@@ -10,7 +10,7 @@ To install Syringe:
 
 **main.go**
 
-```
+```go
 package main
 
 import (
@@ -36,7 +36,7 @@ func main() {
 
 **controller.go**
 
-```
+```go
 package main
 
 import (
@@ -65,7 +65,7 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request, params map[
 
 **model.go**
 
-```
+```go
 package main
 
 import "github.com/solher/syringe"
@@ -90,7 +90,7 @@ func (m *Model) Action() {
 
 **store.go**
 
-```
+```go
 package main
 
 import "github.com/solher/syringe"
