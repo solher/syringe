@@ -111,7 +111,7 @@ func (s *Store) DBAction() {}
 
 ## Features
 
-* Dependency graph builder based on constructors (see [facebookgo/inject](https://github.com/facebookgo/inject) if you don't use constructors)
+* Dependency graph builder using constructors (see [facebookgo/inject](https://github.com/facebookgo/inject) if you don't use constructors)
 * Circular dependencies resolver
 
 ## License
