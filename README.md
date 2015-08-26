@@ -1,4 +1,4 @@
-# Syringe
+# Syringe [![Build Status](https://travis-ci.org/solher/syringe.svg)](https://travis-ci.org/solher/syringe) [![](http://gocover.io/_badge/github.com/solher/syringe)](http://gocover.io/github.com/solher/syringe) <a href="https://codeclimate.com/github/solher/syringe"><img src="https://codeclimate.com/github/solher/syringe/badges/gpa.svg" /></a>
 
 ## Installation
 
