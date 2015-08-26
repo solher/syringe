@@ -8,7 +8,7 @@ To install Syringe:
 
 ## Usage
 
-main.go
+**main.go**
 
 ```
 package main
@@ -34,7 +34,7 @@ func main() {
 }
 ```
 
-controller.go
+**controller.go**
 
 ```
 package main
@@ -63,7 +63,7 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request, params map[
 }
 ```
 
-model.go
+**model.go**
 
 ```
 package main
@@ -88,7 +88,7 @@ func (m *Model) Action() {
 
 ```
 
-store.go
+**store.go**
 
 ```
 package main
@@ -111,8 +111,8 @@ func (s *Store) DBAction() {}
 
 ## Features
 
-* Dependency graph builder using constructors (see [facebookgo/inject](https://github.com/facebookgo/inject) if you don't use constructors)
-* Circular dependencies resolver
+- Dependency graph builder using constructors (see [facebookgo/inject](https://github.com/facebookgo/inject) if you don't use constructors)
+- Circular dependencies resolver
 
 ## License
 
