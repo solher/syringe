@@ -1,7 +1,0 @@
-engines:
-  gofmt:
-    enabled: true
-  golint:
-    enabled: true
-  govet:
-    enabled: true
