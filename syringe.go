@@ -1,3 +1,4 @@
+// Package syringe provide tools to build dependency graphs using constructors.
 package syringe
 
 import (
@@ -5,7 +6,7 @@ import (
 	"reflect"
 )
 
-// Default provide a quick access to an instanciated injector
+// Default provide a quick access to an instanciated injector.
 var Default = New()
 
 // Syringe is a dependency injector.
@@ -38,19 +39,19 @@ func (p *Syringe) Register(dependencies ...interface{}) error {
 // to its type.
 func (p *Syringe) GetOne(obj interface{}) error {
 	if obj == nil {
-		return errors.New("Invalid param: is nil")
+		return errors.New("invalid param: is nil")
 	}
 
 	objPtr := reflect.ValueOf(obj)
 
 	if objPtr.Type().Kind() != reflect.Ptr {
-		return errors.New("Invalid param: is not a pointer to a dep")
+		return errors.New("invalid param: is not a pointer to a dep")
 	}
 
 	objValue := objPtr.Elem()
 
 	if objValue.Kind() == reflect.Invalid {
-		return errors.New("Invalid param: the dep pointer must be initialized")
+		return errors.New("invalid param: the dep pointer must be initialized")
 	}
 
 	for _, dep := range p.deps {
@@ -69,13 +70,13 @@ func (p *Syringe) GetOne(obj interface{}) error {
 // dependencies corresponding to their type.
 func (p *Syringe) Get(depStruct interface{}) error {
 	if depStruct == nil {
-		return errors.New("Invalid param: is nil")
+		return errors.New("invalid param: is nil")
 	}
 
 	ptrStruct := reflect.ValueOf(depStruct)
 
 	if ptrStruct.Type().Kind() != reflect.Ptr || ptrStruct.Elem().Kind() != reflect.Struct {
-		return errors.New("Invalid param: is not a pointer to a struct to inject")
+		return errors.New("invalid param: is not a pointer to a struct to inject")
 	}
 
 	structValue := ptrStruct.Elem()
@@ -269,9 +270,6 @@ func (p *Syringe) stubInject(params *injectionParams) (*injectionParams, error) 
 
 			returnValues := c.Call(params)
 			deps = append(deps, returnValues...)
-
-		case reflect.Ptr:
-			deps = append(deps, c)
 		}
 	}
 

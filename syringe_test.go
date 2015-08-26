@@ -45,6 +45,7 @@ func newDep4() *dep4 {
 	return &dep4{content: "foobar"}
 }
 
+// TestRegister runs tests on the syringe Register method.
 func TestRegister(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -70,6 +71,7 @@ func TestRegister(t *testing.T) {
 	a.IsType(newDep4, syringe.deps[4])
 }
 
+// TestRegister runs tests on the syringe SafeInject method.
 func TestSafeInject(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -108,6 +110,7 @@ func TestSafeInject(t *testing.T) {
 	}
 }
 
+// TestRegister runs tests on the syringe Inject method.
 func TestInject(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -162,6 +165,7 @@ func TestInject(t *testing.T) {
 	a.Error(err, "we expect the inject method to throw an error when multiple constructors return the same type")
 }
 
+// TestRegister runs tests on the syringe Get method.
 func TestGet(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -195,6 +199,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
+// TestRegister runs tests on the syringe GetOne method.
 func TestGetOne(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
