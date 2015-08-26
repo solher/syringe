@@ -1,4 +1,4 @@
-# Syringe [![Build Status](https://travis-ci.org/solher/syringe.svg)](https://travis-ci.org/solher/syringe) [![](http://gocover.io/_badge/github.com/solher/syringe)](http://gocover.io/github.com/solher/syringe)
+# Syringe [![Build Status](https://travis-ci.org/solher/syringe.svg)](https://travis-ci.org/solher/syringe) [![Coverage Status](https://coveralls.io/repos/solher/syringe/badge.svg?branch=master&service=github)](https://coveralls.io/github/solher/syringe?branch=master)
 
 ## Installation
 
