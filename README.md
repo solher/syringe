@@ -1,10 +1,10 @@
-# Peeler
+# Syringe
 
 ## Installation
 
-To install Peeler:
+To install Syringe:
 
-    go get github.com/solher/peeler
+    go get github.com/solher/syringe
 
 ## Usage
 
@@ -18,15 +18,15 @@ import (
 	"net/http"
 
 	"github.com/dimfeld/httptreemux"
-	"github.com/solher/peeler"
+	"github.com/solher/syringe"
 )
 
 func main() {
-	peeler.Default.Populate()
+	syringe.Default.Inject()
 	router := httptreemux.New()
 
 	controller := &Controller{}
-	peeler.Default.GetOne(controller)
+	syringe.Default.GetOne(controller)
 
 	router.POST("/", controller.Handler)
 
@@ -42,11 +42,11 @@ package main
 import (
 	"net/http"
 
-	"github.com/solher/peeler"
+	"github.com/solher/syringe"
 )
 
 func init() {
-	peeler.Default.Register(NewController)
+	syringe.Default.Register(NewController)
 }
 
 type Controller struct {
@@ -68,10 +68,10 @@ model.go
 ```
 package main
 
-import "github.com/solher/peeler"
+import "github.com/solher/syringe"
 
 func init() {
-	peeler.Default.Register(NewModel)
+	syringe.Default.Register(NewModel)
 }
 
 type Model struct {
@@ -93,10 +93,10 @@ store.go
 ```
 package main
 
-import "github.com/solher/peeler"
+import "github.com/solher/syringe"
 
 func init() {
-	peeler.Default.Register(NewStore)
+	syringe.Default.Register(NewStore)
 }
 
 type Store struct{}

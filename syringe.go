@@ -1,4 +1,4 @@
-package peeler
+package syringe
 
 import (
 	"errors"
@@ -8,20 +8,20 @@ import (
 // Default provide a quick access to an instanciated injector
 var Default = New()
 
-// Peeler is a dependency injector.
+// Syringe is a dependency injector.
 // The deps field contains the dependencies and constructors to inject.
-type Peeler struct {
+type Syringe struct {
 	deps []interface{}
 }
 
-// New returns a new Peeler object.
-func New() *Peeler {
-	return &Peeler{}
+// New returns a new Syringe object.
+func New() *Syringe {
+	return &Syringe{}
 }
 
 // Register takes one, multiple, or a slice of dependencies and register them
 // into the injector.
-func (p *Peeler) Register(dependencies ...interface{}) error {
+func (p *Syringe) Register(dependencies ...interface{}) error {
 	for _, d := range dependencies {
 		switch d.(type) {
 		case []interface{}:
@@ -34,9 +34,9 @@ func (p *Peeler) Register(dependencies ...interface{}) error {
 	return nil
 }
 
-// GetOne populates an empty pointer passed as argument with a dependency corresponding
+// GetOne injects an empty pointer passed as argument with a dependency corresponding
 // to its type.
-func (p *Peeler) GetOne(obj interface{}) error {
+func (p *Syringe) GetOne(obj interface{}) error {
 	if obj == nil {
 		return errors.New("Invalid param: is nil")
 	}
@@ -65,9 +65,9 @@ func (p *Peeler) GetOne(obj interface{}) error {
 	return nil
 }
 
-// Get populates the fields of an indirected struct passed as argument with
+// Get injects the fields of an indirected struct passed as argument with
 // dependencies corresponding to their type.
-func (p *Peeler) Get(depStruct interface{}) error {
+func (p *Syringe) Get(depStruct interface{}) error {
 	if depStruct == nil {
 		return errors.New("Invalid param: is nil")
 	}
@@ -75,7 +75,7 @@ func (p *Peeler) Get(depStruct interface{}) error {
 	ptrStruct := reflect.ValueOf(depStruct)
 
 	if ptrStruct.Type().Kind() != reflect.Ptr || ptrStruct.Elem().Kind() != reflect.Struct {
-		return errors.New("Invalid param: is not a pointer to a struct to populate")
+		return errors.New("Invalid param: is not a pointer to a struct to inject")
 	}
 
 	structValue := ptrStruct.Elem()
@@ -102,7 +102,7 @@ type injectionParams struct {
 	partialContructors, deps []reflect.Value
 }
 
-// Populate builds the dependency graph.
+// Inject builds the dependency graph.
 // It is capable to resolve circular dependencies using stub injection.
 //
 // Example:
@@ -130,17 +130,17 @@ type injectionParams struct {
 //
 // That being said, it feels like the standard way of doing things as it is a very
 // specific problem that can't be fixed by a "by hand" injection. (True ?)
-func (p *Peeler) Populate() error {
-	return p.populate(false)
+func (p *Syringe) Inject() error {
+	return p.inject(false)
 }
 
-// SafePopulate builds the dependency graph as a human would do by hand.
+// SafeInject builds the dependency graph as a human would do by hand.
 // Therefore, it is not capable to resolve circular dependencies.
-func (p *Peeler) SafePopulate() error {
-	return p.populate(true)
+func (p *Syringe) SafeInject() error {
+	return p.inject(true)
 }
 
-func (p *Peeler) populate(safeMode bool) error {
+func (p *Syringe) inject(safeMode bool) error {
 	// first, injection conflicts are checked
 	if !checkInjectionConflicts(p.deps) {
 		return errors.New("conflict detected: multiple constructors returning the same dependency type")
@@ -148,7 +148,7 @@ func (p *Peeler) populate(safeMode bool) error {
 
 	params := &injectionParams{}
 
-	// then the params are populated from the provided dependencies
+	// then the params are injectd from the provided dependencies
 	for _, dep := range p.deps {
 		value := reflect.ValueOf(dep)
 
@@ -161,13 +161,13 @@ func (p *Peeler) populate(safeMode bool) error {
 	}
 
 	// the injection is run
-	results, err := p.simplePopulate(params)
+	results, err := p.simpleInject(params)
 	if err != nil {
 		if safeMode {
 			return err
 		}
 
-		results, err = p.stubPopulate(results)
+		results, err = p.stubInject(results)
 		if err != nil {
 			return err
 		}
@@ -182,7 +182,7 @@ func (p *Peeler) populate(safeMode bool) error {
 	return nil
 }
 
-func (p *Peeler) simplePopulate(params *injectionParams) (*injectionParams, error) {
+func (p *Syringe) simpleInject(params *injectionParams) (*injectionParams, error) {
 	// "missingDeps" is the list of every dependencies missing to call the constructors in "partialContructors"
 	missingDeps := params.missingDeps
 	// "partialContructors" is the list of the constructors which can't be called with the params in "deps"
@@ -236,7 +236,7 @@ func (p *Peeler) simplePopulate(params *injectionParams) (*injectionParams, erro
 	return results, nil
 }
 
-func (p *Peeler) stubPopulate(params *injectionParams) (*injectionParams, error) {
+func (p *Syringe) stubInject(params *injectionParams) (*injectionParams, error) {
 	// "stubDeps" is the list of every stub empty dependencies instanciated during the injection
 	stubDeps := []reflect.Value{}
 	// "missingDeps" is the list of every dependencies missing to replace stub ones
