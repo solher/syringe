@@ -1,4 +1,4 @@
-package main
+package peeler
 
 import (
 	"testing"
@@ -48,7 +48,7 @@ func newDep4() *dep4 {
 func TestRegister(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
-	peeler := NewPeeler()
+	peeler := New()
 
 	deps := []interface{}{
 		newDep1,
@@ -73,7 +73,7 @@ func TestRegister(t *testing.T) {
 func TestSafePopulate(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
-	peeler := NewPeeler()
+	peeler := New()
 
 	peeler.deps = append(peeler.deps, newDep3)
 
@@ -111,7 +111,7 @@ func TestSafePopulate(t *testing.T) {
 func TestPopulate(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
-	peeler := NewPeeler()
+	peeler := New()
 
 	peeler.deps = append(peeler.deps, newDep3)
 
@@ -165,7 +165,7 @@ func TestPopulate(t *testing.T) {
 func TestGet(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
-	peeler := NewPeeler()
+	peeler := New()
 	buildDeps(peeler)
 
 	type privateDep struct {
@@ -198,7 +198,7 @@ func TestGet(t *testing.T) {
 func TestGetOne(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
-	peeler := NewPeeler()
+	peeler := New()
 	buildDeps(peeler)
 
 	var uninitDep *dep1

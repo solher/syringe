@@ -1,9 +1,12 @@
-package main
+package peeler
 
 import (
 	"errors"
 	"reflect"
 )
+
+// Default provide a quick access to an instanciated injector
+var Default = New()
 
 // Peeler is a dependency injector.
 // The deps field contains the dependencies and constructors to inject.
@@ -11,8 +14,8 @@ type Peeler struct {
 	deps []interface{}
 }
 
-// NewPeeler returns a new Peeler object.
-func NewPeeler() *Peeler {
+// New returns a new Peeler object.
+func New() *Peeler {
 	return &Peeler{}
 }
 
