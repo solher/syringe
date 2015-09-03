@@ -1,4 +1,5 @@
-# Syringe [![Build Status](https://travis-ci.org/solher/syringe.svg)](https://travis-ci.org/solher/syringe) [![Coverage Status](https://coveralls.io/repos/solher/syringe/badge.svg?branch=master&service=github)](https://coveralls.io/github/solher/syringe?branch=master)
+# Syringe [![Build Status](https://travis-ci.org/solher/syringe.svg)](https://travis-ci.org/solher/syringe) [![Coverage Status](https://coveralls.io/repos/solher/syringe/badge.svg?branch=master&service=github)](https://coveralls.io/github/solher/syringe?branch=master) <a href="https://codeclimate.com/github/solher/syringe"><img src="https://codeclimate.com/github/solher/syringe/badges/gpa.svg" /></a>
+
 
 ## Installation
 
@@ -22,7 +23,7 @@ import (
 )
 
 func main() {
-	syringe.Default.Inject()
+	syringe.Default.Inject() // The Default var is a pre-instanciated injector
 	router := httptreemux.New()
 
 	controller := &Controller{}
