@@ -69,9 +69,13 @@ func TestRegister(t *testing.T) {
 	syringe.Register(newDep4)
 	r.NotPanics(func() { _ = syringe.deps[4] })
 	a.IsType(newDep4, syringe.deps[4])
+
+	syringe.Register(newDep4())
+	r.NotPanics(func() { _ = syringe.deps[5] })
+	a.IsType(&dep4{}, syringe.deps[5])
 }
 
-// TestRegister runs tests on the syringe SafeInject method.
+// TestSafeInject runs tests on the syringe SafeInject method.
 func TestSafeInject(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -99,6 +103,21 @@ func TestSafeInject(t *testing.T) {
 		a.Equal(depC.depA.content, "foobar")
 	}
 
+	syringe = New()
+	syringe.deps = append(syringe.deps, newDep3, newDep4()) // Should work the same if the dep is instanciated at the registering
+	err = syringe.SafeInject()
+	if a.NoError(err) {
+		_, _, depC, depD := getDeps(syringe)
+
+		r.NotNil(depC)
+		r.NotNil(depD)
+		r.IsType(&dep3{}, depC)
+		r.IsType(&dep4{}, depD)
+
+		a.NotNil(depC.depA)
+		a.Equal(depC.depA.content, "foobar")
+	}
+
 	syringe.deps = append(syringe.deps, newDep1, newDep2)
 	err = syringe.SafeInject()
 	a.Error(err, "we expect the safe inject to throw an error when dealing with a circular dependency")
@@ -110,7 +129,7 @@ func TestSafeInject(t *testing.T) {
 	}
 }
 
-// TestRegister runs tests on the syringe Inject method.
+// TestInject runs tests on the syringe Inject method.
 func TestInject(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -126,6 +145,21 @@ func TestInject(t *testing.T) {
 	syringe.deps = append(syringe.deps, newDep4)
 
 	err = syringe.Inject()
+	if a.NoError(err) {
+		_, _, depC, depD := getDeps(syringe)
+
+		r.NotNil(depC)
+		r.NotNil(depD)
+		r.IsType(&dep3{}, depC)
+		r.IsType(&dep4{}, depD)
+
+		a.NotNil(depC.depA)
+		a.Equal(depC.depA.content, "foobar")
+	}
+
+	syringe = New()
+	syringe.deps = append(syringe.deps, newDep3, newDep4()) // Should work the same if the dep is instanciated at the registering
+	err = syringe.SafeInject()
 	if a.NoError(err) {
 		_, _, depC, depD := getDeps(syringe)
 
@@ -165,7 +199,32 @@ func TestInject(t *testing.T) {
 	a.Error(err, "we expect the inject method to throw an error when multiple constructors return the same type")
 }
 
-// TestRegister runs tests on the syringe Get method.
+// TestGetOne runs tests on the syringe GetOne method.
+func TestGetOne(t *testing.T) {
+	a := assert.New(t)
+	r := require.New(t)
+	syringe := New()
+	buildDeps(syringe)
+
+	var uninitDep *dep1
+	integer := 2
+
+	r.NotPanics(func() { _ = syringe.GetOne(nil) })
+	r.NotPanics(func() { _ = syringe.GetOne(integer) })
+	r.NotPanics(func() { _ = syringe.GetOne(&integer) })
+	r.NotPanics(func() { _ = syringe.GetOne(dep4{}) })
+	r.NotPanics(func() { _ = syringe.GetOne(uninitDep) })
+
+	foundDepA := &dep4{}
+
+	err := syringe.GetOne(foundDepA)
+	if a.NoError(err) {
+		r.NotNil(foundDepA)
+		a.Equal(foundDepA.content, "foobar")
+	}
+}
+
+// TestGet runs tests on the syringe Get method.
 func TestGet(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -196,31 +255,6 @@ func TestGet(t *testing.T) {
 		r.NotNil(deps.FoundDepD)
 		r.NotNil(deps.FoundDepA)
 		a.EqualValues(deps.FoundDepD.depB.depA, deps.FoundDepA)
-	}
-}
-
-// TestRegister runs tests on the syringe GetOne method.
-func TestGetOne(t *testing.T) {
-	a := assert.New(t)
-	r := require.New(t)
-	syringe := New()
-	buildDeps(syringe)
-
-	var uninitDep *dep1
-	integer := 2
-
-	r.NotPanics(func() { _ = syringe.GetOne(nil) })
-	r.NotPanics(func() { _ = syringe.GetOne(integer) })
-	r.NotPanics(func() { _ = syringe.GetOne(&integer) })
-	r.NotPanics(func() { _ = syringe.GetOne(dep4{}) })
-	r.NotPanics(func() { _ = syringe.GetOne(uninitDep) })
-
-	foundDepA := &dep4{}
-
-	err := syringe.GetOne(foundDepA)
-	if a.NoError(err) {
-		r.NotNil(foundDepA)
-		a.Equal(foundDepA.content, "foobar")
 	}
 }
 

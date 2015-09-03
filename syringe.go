@@ -22,22 +22,20 @@ func New() *Syringe {
 
 // Register takes one, multiple, or a slice of dependencies and register them
 // into the injector.
-func (p *Syringe) Register(dependencies ...interface{}) error {
+func (s *Syringe) Register(dependencies ...interface{}) {
 	for _, d := range dependencies {
 		switch d.(type) {
 		case []interface{}:
-			p.deps = append(p.deps, d.([]interface{})...)
+			s.deps = append(s.deps, d.([]interface{})...)
 		case interface{}:
-			p.deps = append(p.deps, d)
+			s.deps = append(s.deps, d)
 		}
 	}
-
-	return nil
 }
 
 // GetOne injects an empty pointer passed as argument with a dependency corresponding
 // to its type.
-func (p *Syringe) GetOne(obj interface{}) error {
+func (s *Syringe) GetOne(obj interface{}) error {
 	if obj == nil {
 		return errors.New("invalid param: is nil")
 	}
@@ -54,21 +52,21 @@ func (p *Syringe) GetOne(obj interface{}) error {
 		return errors.New("invalid param: the dep pointer must be initialized")
 	}
 
-	for _, dep := range p.deps {
+	for _, dep := range s.deps {
 		depPtr := reflect.ValueOf(dep)
 
 		if objPtr.Type() == depPtr.Type() && objValue.CanSet() {
 			objValue.Set(depPtr.Elem())
-			break
+			return nil
 		}
 	}
 
-	return nil
+	return errors.New("dep not found")
 }
 
 // Get injects the fields of an indirected struct passed as argument with
 // dependencies corresponding to their type.
-func (p *Syringe) Get(depStruct interface{}) error {
+func (s *Syringe) Get(depStruct interface{}) error {
 	if depStruct == nil {
 		return errors.New("invalid param: is nil")
 	}
@@ -85,7 +83,7 @@ func (p *Syringe) Get(depStruct interface{}) error {
 	for i := 0; i < numField; i++ {
 		fieldPtr := structValue.Field(i)
 
-		for _, dep := range p.deps {
+		for _, dep := range s.deps {
 			depPtr := reflect.ValueOf(dep)
 
 			if fieldPtr.Type() == depPtr.Type() && fieldPtr.CanSet() {
@@ -131,26 +129,26 @@ type injectionParams struct {
 //
 // That being said, it feels like the standard way of doing things as it is a very
 // specific problem that can't be fixed by a "by hand" injection. (True ?)
-func (p *Syringe) Inject() error {
-	return p.inject(false)
+func (s *Syringe) Inject() error {
+	return s.inject(false)
 }
 
 // SafeInject builds the dependency graph as a human would do by hand.
 // Therefore, it is not capable to resolve circular dependencies.
-func (p *Syringe) SafeInject() error {
-	return p.inject(true)
+func (s *Syringe) SafeInject() error {
+	return s.inject(true)
 }
 
-func (p *Syringe) inject(safeMode bool) error {
+func (s *Syringe) inject(safeMode bool) error {
 	// first, injection conflicts are checked
-	if !checkInjectionConflicts(p.deps) {
+	if !checkInjectionConflicts(s.deps) {
 		return errors.New("conflict detected: multiple constructors returning the same dependency type")
 	}
 
 	params := &injectionParams{}
 
 	// then the params are injectd from the provided dependencies
-	for _, dep := range p.deps {
+	for _, dep := range s.deps {
 		value := reflect.ValueOf(dep)
 
 		switch value.Kind() {
@@ -162,28 +160,28 @@ func (p *Syringe) inject(safeMode bool) error {
 	}
 
 	// the injection is run
-	results, err := p.simpleInject(params)
+	results, err := s.simpleInject(params)
 	if err != nil {
 		if safeMode {
 			return err
 		}
 
-		results, err = p.stubInject(results)
+		results, err = s.stubInject(results)
 		if err != nil {
 			return err
 		}
 	}
 
 	// the results are saved if no error occurred
-	p.deps = []interface{}{}
+	s.deps = []interface{}{}
 	for _, dep := range results.deps {
-		p.deps = append(p.deps, dep.Interface())
+		s.deps = append(s.deps, dep.Interface())
 	}
 
 	return nil
 }
 
-func (p *Syringe) simpleInject(params *injectionParams) (*injectionParams, error) {
+func (s *Syringe) simpleInject(params *injectionParams) (*injectionParams, error) {
 	// "missingDeps" is the list of every dependencies missing to call the constructors in "partialContructors"
 	missingDeps := params.missingDeps
 	// "partialContructors" is the list of the constructors which can't be called with the params in "deps"
@@ -237,7 +235,7 @@ func (p *Syringe) simpleInject(params *injectionParams) (*injectionParams, error
 	return results, nil
 }
 
-func (p *Syringe) stubInject(params *injectionParams) (*injectionParams, error) {
+func (s *Syringe) stubInject(params *injectionParams) (*injectionParams, error) {
 	// "stubDeps" is the list of every stub empty dependencies instanciated during the injection
 	stubDeps := []reflect.Value{}
 	// "missingDeps" is the list of every dependencies missing to replace stub ones
