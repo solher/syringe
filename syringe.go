@@ -1,4 +1,4 @@
-// Package syringe provide tools to build dependency graphs using constructors.
+// Package syringe provides tools to build dependency graphs using constructors.
 package syringe
 
 import (
