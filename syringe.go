@@ -33,37 +33,6 @@ func (s *Syringe) Register(dependencies ...interface{}) {
 	}
 }
 
-// GetOne injects an empty pointer passed as argument with a dependency corresponding
-// to its type.
-func (s *Syringe) GetOne(obj interface{}) error {
-	if obj == nil {
-		return errors.New("invalid param: is nil")
-	}
-
-	objPtr := reflect.ValueOf(obj)
-
-	if objPtr.Type().Kind() != reflect.Ptr {
-		return errors.New("invalid param: is not a pointer to a dep")
-	}
-
-	objValue := objPtr.Elem()
-
-	if objValue.Kind() == reflect.Invalid {
-		return errors.New("invalid param: the dep pointer must be initialized")
-	}
-
-	for _, dep := range s.deps {
-		depPtr := reflect.ValueOf(dep)
-
-		if objPtr.Type() == depPtr.Type() && objValue.CanSet() {
-			objValue.Set(depPtr.Elem())
-			return nil
-		}
-	}
-
-	return errors.New("dep not found")
-}
-
 // Get injects the fields of an indirected struct passed as argument with
 // dependencies corresponding to their type.
 func (s *Syringe) Get(depStruct interface{}) error {

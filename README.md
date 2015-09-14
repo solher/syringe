@@ -26,12 +26,14 @@ func main() {
 	syringe.Default.Inject() // The Default var is a pre-instanciated injector
 	router := httptreemux.New()
 
-	controller := &Controller{}
-	syringe.Default.GetOne(controller)
+	d := &struct{ c *Controller }{}
+	if err := syringe.Default.Get(d); err != nil {
+		panic(err)
+	}
 
-	router.POST("/", controller.Handler)
+	router.POST("/", d.c.Handler)
 
-	log.Fatal(http.ListenAndServe(":3000", router))
+	http.ListenAndServe(":3000", router)
 }
 ```
 

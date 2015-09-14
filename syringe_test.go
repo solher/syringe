@@ -199,31 +199,6 @@ func TestInject(t *testing.T) {
 	a.Error(err, "we expect the inject method to throw an error when multiple constructors return the same type")
 }
 
-// TestGetOne runs tests on the syringe GetOne method.
-func TestGetOne(t *testing.T) {
-	a := assert.New(t)
-	r := require.New(t)
-	syringe := New()
-	buildDeps(syringe)
-
-	var uninitDep *dep1
-	integer := 2
-
-	r.NotPanics(func() { _ = syringe.GetOne(nil) })
-	r.NotPanics(func() { _ = syringe.GetOne(integer) })
-	r.NotPanics(func() { _ = syringe.GetOne(&integer) })
-	r.NotPanics(func() { _ = syringe.GetOne(dep4{}) })
-	r.NotPanics(func() { _ = syringe.GetOne(uninitDep) })
-
-	foundDepA := &dep4{}
-
-	err := syringe.GetOne(foundDepA)
-	if a.NoError(err) {
-		r.NotNil(foundDepA)
-		a.Equal(foundDepA.content, "foobar")
-	}
-}
-
 // TestGet runs tests on the syringe Get method.
 func TestGet(t *testing.T) {
 	a := assert.New(t)
@@ -255,6 +230,14 @@ func TestGet(t *testing.T) {
 		r.NotNil(deps.FoundDepD)
 		r.NotNil(deps.FoundDepA)
 		a.EqualValues(deps.FoundDepD.depB.depA, deps.FoundDepA)
+		deps.FoundDepA.content = "barfoo"
+	}
+
+	deps = &dependencies{}
+
+	err = syringe.Get(deps)
+	if a.NoError(err) {
+		a.EqualValues(deps.FoundDepA.content, "barfoo")
 	}
 }
 
