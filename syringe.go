@@ -195,7 +195,10 @@ func (s *Syringe) simpleInject(params *injectionParams) (*injectionParams, error
 	for len(deps) > lastDepsLen {
 		lastDepsLen = len(deps)
 
-		for _, cons := range partialContructors {
+		partialContructorsCopy := make([]reflect.Value, len(partialContructors))
+		copy(partialContructorsCopy, partialContructors)
+
+		for _, cons := range partialContructorsCopy {
 			params := []reflect.Value{}
 			numIn := cons.Type().NumIn()
 
