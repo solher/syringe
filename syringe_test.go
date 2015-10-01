@@ -100,7 +100,7 @@ func TestSafeInject(t *testing.T) {
 		r.IsType(&dep4{}, depD)
 
 		a.NotNil(depC.depA)
-		a.Equal(depC.depA.content, "foobar")
+		a.Equal("foobar", depC.depA.content)
 	}
 
 	syringe = New()
@@ -115,7 +115,7 @@ func TestSafeInject(t *testing.T) {
 		r.IsType(&dep4{}, depD)
 
 		a.NotNil(depC.depA)
-		a.Equal(depC.depA.content, "foobar")
+		a.Equal("foobar", depC.depA.content)
 	}
 
 	syringe.deps = append(syringe.deps, newDep1, newDep2)
@@ -154,7 +154,7 @@ func TestInject(t *testing.T) {
 		r.IsType(&dep4{}, depD)
 
 		a.NotNil(depC.depA)
-		a.Equal(depC.depA.content, "foobar")
+		a.Equal("foobar", depC.depA.content)
 	}
 
 	syringe = New()
@@ -169,7 +169,7 @@ func TestInject(t *testing.T) {
 		r.IsType(&dep4{}, depD)
 
 		a.NotNil(depC.depA)
-		a.Equal(depC.depA.content, "foobar")
+		a.Equal("foobar", depC.depA.content)
 	}
 
 	syringe.deps = append(syringe.deps, newDep1, newDep2)
@@ -188,10 +188,10 @@ func TestInject(t *testing.T) {
 		r.IsType(&dep4{}, depD)
 
 		a.NotNil(depA.depB)
-		a.Equal(depA.depB.depA.content, "foobar")
-		a.Equal(depA.depB.content, "foobar")
-		a.EqualValues(depA.depA, depB)
-		a.EqualValues(depB.depA, depA)
+		a.Equal("foobar", depA.depB.depA.content)
+		a.Equal("foobar", depA.depB.content)
+		a.EqualValues(depB, depA.depA)
+		a.EqualValues(depA, depB.depA)
 	}
 
 	syringe.deps = append(syringe.deps, newDep1, newDep1)
@@ -229,7 +229,7 @@ func TestGet(t *testing.T) {
 		r.NotNil(deps)
 		r.NotNil(deps.FoundDepD)
 		r.NotNil(deps.FoundDepA)
-		a.EqualValues(deps.FoundDepD.depB.depA, deps.FoundDepA)
+		a.EqualValues(deps.FoundDepA, deps.FoundDepD.depB.depA)
 		deps.FoundDepA.content = "barfoo"
 	}
 
@@ -237,7 +237,7 @@ func TestGet(t *testing.T) {
 
 	err = syringe.Get(deps)
 	if a.NoError(err) {
-		a.EqualValues(deps.FoundDepA.content, "barfoo")
+		a.EqualValues("barfoo", deps.FoundDepA.content)
 	}
 }
 
