@@ -1,4 +1,4 @@
-# Syringe [![Build Status](https://travis-ci.org/solher/syringe.svg)](https://travis-ci.org/solher/syringe) [![Coverage Status](https://coveralls.io/repos/solher/syringe/badge.svg?branch=master&service=github)](https://coveralls.io/github/solher/syringe?branch=master) [![Code Climate](https://codeclimate.com/github/solher/syringe/badges/gpa.svg)](https://codeclimate.com/github/solher/syringe)
+# Syringe [![Build Status](https://travis-ci.org/solher/syringe.svg?branch=master)](https://travis-ci.org/solher/syringe) [![Coverage Status](https://coveralls.io/repos/solher/syringe/badge.svg?branch=master&service=github)](https://coveralls.io/github/solher/syringe?branch=master) [![Code Climate](https://codeclimate.com/github/solher/syringe/badges/gpa.svg)](https://codeclimate.com/github/solher/syringe)
 
 
 ## Installation
