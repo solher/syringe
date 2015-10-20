@@ -116,7 +116,7 @@ func (s *Syringe) inject(safeMode bool) error {
 
 	params := &injectionParams{}
 
-	// then the params are injectd from the provided dependencies
+	// then the params are injected from the provided dependencies
 	for _, dep := range s.deps {
 		value := reflect.ValueOf(dep)
 
@@ -207,15 +207,15 @@ func (s *Syringe) simpleInject(params *injectionParams) (*injectionParams, error
 	return results, nil
 }
 
-func (s *Syringe) stubInject(params *injectionParams) (*injectionParams, error) {
+func (s *Syringe) stubInject(p *injectionParams) (*injectionParams, error) {
 	// "stubDeps" is the list of every stub empty dependencies instanciated during the injection
 	stubDeps := []reflect.Value{}
-	// "missingDeps" is the list of every dependencies missing to replace stub ones
-	missingDeps := params.missingDeps
+	// "missingDepsMap" is the list of every dependencies missing to replace stub ones
+	missingDepsMap := make(map[reflect.Type]bool)
 	// "partialContructors" is the list of the constructors which can't be called with the params in "deps"
-	partialContructors := params.partialContructors
+	partialContructors := p.partialContructors
 	// "deps" is the list of every dependencies available for injection
-	deps := params.deps
+	deps := p.deps
 
 	// in the first step, the partial constructors are called with stubs when deps are missing
 	for _, c := range partialContructors {
@@ -234,18 +234,20 @@ func (s *Syringe) stubInject(params *injectionParams) (*injectionParams, error) 
 						stubDep := reflect.New(param.Elem())
 						params = append(params, stubDep)
 						stubDeps = append(stubDeps, stubDep)
+					} else {
+						missingDepsMap[param] = true
 					}
 				}
 			}
 
-			returnValues := c.Call(params)
-			deps = append(deps, returnValues...)
+			if len(params) == c.Type().NumIn() {
+				returnValues := c.Call(params)
+				deps = append(deps, returnValues...)
+			}
 		}
 	}
 
 	// in the second step, the stub dependencies are replaced by "real" ones
-	missingDeps = []reflect.Type{}
-
 	for _, stubDep := range stubDeps {
 		found := false
 
@@ -257,8 +259,13 @@ func (s *Syringe) stubInject(params *injectionParams) (*injectionParams, error) 
 		}
 
 		if !found {
-			missingDeps = append(missingDeps, stubDep.Type())
+			missingDepsMap[stubDep.Type()] = true
 		}
+	}
+
+	missingDeps := []reflect.Type{}
+	for k := range missingDepsMap {
+		missingDeps = append(missingDeps, k)
 	}
 
 	results := &injectionParams{
@@ -297,7 +304,7 @@ func removeType(a []reflect.Type, value reflect.Type) ([]reflect.Type, error) {
 
 func find(a []reflect.Value, depType reflect.Type) (reflect.Value, error) {
 	for _, v := range a {
-		if v.Type() == depType {
+		if v.Type() == depType || (depType.Kind() == reflect.Interface && v.Type().Implements(depType)) {
 			return v, nil
 		}
 	}
@@ -333,6 +340,7 @@ func checkMissingDependencies(missingDeps []reflect.Type) error {
 		for _, d := range missingDeps {
 			errMsg = errMsg + d.String() + ", "
 		}
+
 		return errors.New(errMsg[:len(errMsg)-2])
 	}
 

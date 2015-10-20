@@ -26,7 +26,13 @@ type (
 	dep4 struct {
 		content string
 	}
+
+	inter interface {
+		method()
+	}
 )
+
+func (d *dep1) method() {}
 
 func newDep1(depA *dep2, depB *dep3) *dep1 {
 	depB.content = "foobar"
@@ -35,6 +41,10 @@ func newDep1(depA *dep2, depB *dep3) *dep1 {
 
 func newDep2(depA *dep1, depB *dep3) *dep2 {
 	return &dep2{depA: depA, depB: depB}
+}
+
+func newDep2Inter(depA inter, depB *dep3) *dep2 {
+	return &dep2{depA: depA.(*dep1), depB: depB}
 }
 
 func newDep3(depA *dep4) *dep3 {
@@ -173,6 +183,28 @@ func TestInject(t *testing.T) {
 	}
 
 	syringe.deps = append(syringe.deps, newDep1, newDep2)
+
+	err = syringe.Inject()
+	if a.NoError(err) {
+		depA, depB, depC, depD := getDeps(syringe)
+
+		r.NotNil(depA)
+		r.NotNil(depB)
+		r.NotNil(depC)
+		r.NotNil(depD)
+		r.IsType(&dep1{}, depA)
+		r.IsType(&dep2{}, depB)
+		r.IsType(&dep3{}, depC)
+		r.IsType(&dep4{}, depD)
+
+		a.NotNil(depA.depB)
+		a.Equal("foobar", depA.depB.depA.content)
+		a.Equal("foobar", depA.depB.content)
+		a.EqualValues(depB, depA.depA)
+		a.EqualValues(depA, depB.depA)
+	}
+
+	syringe.deps = append(syringe.deps[:len(syringe.deps)-1], newDep2Inter)
 
 	err = syringe.Inject()
 	if a.NoError(err) {
